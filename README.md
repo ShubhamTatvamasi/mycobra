@@ -18,3 +18,7 @@ add new command:
 cobra add random
 ```
 
+```bash
+go get github.com/ShubhamTatvamasi/mycobra
+```
+

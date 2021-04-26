@@ -20,7 +20,9 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"math/rand"
 	"net/http"
+	"time"
 
 	"github.com/spf13/cobra"
 )
@@ -37,18 +39,33 @@ This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		// fmt.Println("random called")
-		getRandomJoke()
+		jokeTerm, _ := cmd.Flags().GetString("term")
+
+		if jokeTerm != "" {
+			getRandomJokeWithTerm(jokeTerm)
+		} else {
+			getRandomJoke()
+		}
 	},
 }
 
 func init() {
 	rootCmd.AddCommand(randomCmd)
+
+	randomCmd.PersistentFlags().String("term", "", "A search term for joke.")
 }
 
 type Joke struct {
 	ID     string `json:"id"`
 	Joke   string `json:"joke"`
 	Status int    `json:"status"`
+}
+
+type SearchResult struct {
+	Results    json.RawMessage `json:"results"`
+	SearchTerm string          `json:"search_term"`
+	Status     int             `json:"status"`
+	TotalJokes int             `json:"total_jokes"`
 }
 
 func getRandomJoke() {
@@ -62,6 +79,44 @@ func getRandomJoke() {
 	}
 
 	fmt.Println(string(joke.Joke))
+}
+
+func getRandomJokeWithTerm(jokeTerm string) {
+	total, results := getJokeDataWithTerm(jokeTerm)
+	randomiseJokeList(total, results)
+}
+
+func randomiseJokeList(length int, jokeList []Joke) {
+	rand.Seed(time.Now().Unix())
+
+	min := 0
+	max := length - 1
+
+	if length <= 0 {
+		err := fmt.Errorf("not able to find any jokes")
+		fmt.Println(err.Error())
+	} else {
+		randomNum := min + rand.Intn(max-min)
+		fmt.Println(jokeList[randomNum].Joke)
+	}
+}
+
+func getJokeDataWithTerm(jokeTerm string) (totalJokes int, jokeList []Joke) {
+	url := fmt.Sprintf("https://icanhazdadjoke.com/search?term=%s", jokeTerm)
+	responseBytes := getJokeData(url)
+	jokeListRaw := SearchResult{}
+
+	if err := json.Unmarshal(responseBytes, &jokeListRaw); err != nil {
+		log.Printf("unmarshal error - %v", err)
+	}
+
+	jokes := []Joke{}
+	if err := json.Unmarshal(jokeListRaw.Results, &jokes); err != nil {
+		log.Printf("unmarshal error - %v", err)
+	}
+
+	return jokeListRaw.TotalJokes, jokes
+
 }
 
 func getJokeData(baseAPI string) []byte {
